@@ -10,56 +10,48 @@
 <body>
 <tw-story><noscript><tw-noscript>JavaScript needs to be enabled to play Untitled Story.</tw-noscript></noscript></tw-story>
 <tw-storydata name="Untitled Story" startnode="1" creator="Twine" creator-version="2.11.1" format="Harlowe" format-version="3.3.9" ifid="CC68B00F-30AC-4B81-B505-CE5BE7B0E431" options="" tags="" zoom="1" hidden><style role="stylesheet" id="twine-user-stylesheet" type="text/twine-css">/* =========================================
-   VN Subtitle UI (Dark BG + Kiwi Maru)
+   VN Subtitle UI (Kiwi Maru) - Refactored
    Twine / Harlowe 3.3.9
    ========================================= */
 
-/* 1) Font: Kiwi Maru */
 @import url("https://fonts.googleapis.com/css2?family=Kiwi+Maru&display=swap");
 
-/* 2) Full-screen background image + base darkness */
-tw-story {
-  /* ↓ここを好きな背景画像に差し替え（URLでもOK）
-     例: url("images/bg_disco.jpg")
-     例: url("https://.../bg.jpg")
-  */
+:root{
+  --vn-font: "Kiwi Maru", system-ui, -apple-system, "Segoe UI",
+             "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+
+  /* スマホ基準の本文サイズ：老眼配慮なら少し大きめでOK */
+  --vn-base-size: clamp(18px, 2.35vh, 22px);
+
+  /* タイトル：端末幅で自然に伸び縮み */
+  --vn-title-size: clamp(40px, 7vw, 64px);
+
+  /* 左右の余白：デフォの大きいpaddingを潰して、必要最低限だけ入れる */
+  --vn-side-padding: clamp(10px, 4vw, 22px);
+
+  /* 下からの位置：UIのホームバー等を避ける */
+  --vn-bottom: 4.5vh;
+
+  /* 下側の字幕帯の暗さ（可読性調整ここ） */
+  --vn-subtitle-dark: 0.62;
+}
+
+tw-story{
   --bg-image: url("bg.jpg");
 
-  /*background-color: #ffffff*/
-  /*デバッグ用の明るいカラー↓↑本番の黒*/
+  margin: 0;
+  padding: 0;
+
   background-color: #050505;
   background-image: var(--bg-image);
   background-size: cover;
   background-position: center center;
   background-repeat: no-repeat;
 
-  /* 文字が乗る前提なので、全体を少し暗くしておく */
-  filter: brightness(0.92) contrast(1.05);
-
-  /* 変な余白が出ないように */
-  margin: 0;
-  padding: 0;
+  /* filter は文字にもかかって劣化しやすいのでやめる */
 }
 
-/* Startだけ中央寄せは align でやってるので、ここはサイズだけ */
-tw-passage .title{
-  font-size: 2.2em;
-  display: block;
-  margin: 0.4em 0 0.6em;
-}
-
-tw-passage .lead{
-  font-size: 1em;
-  display: block;
-  margin: 0.2em 0 1.6em;
-}
-
-/* Startだけ中央寄せ */
-tw-story.start-center tw-passage {
-  text-align: center;
-}
-
-/* 3) Overlay: vignette + subtle film look */
+/* 画面の上にかぶせる：周辺減光＋下だけ暗くする帯 */
 tw-story::before{
   content:"";
   position: fixed;
@@ -67,107 +59,112 @@ tw-story::before{
   pointer-events: none;
 
   background:
-    /* 1) 映像感：ビネット（周辺減光） */
     radial-gradient(ellipse at center,
       rgba(0,0,0,0.00) 0%,
       rgba(0,0,0,0.18) 55%,
       rgba(0,0,0,0.55) 100%
     ),
-
-    /* 2) 可読性：字幕帯（下だけ暗く） */
     linear-gradient(to top,
-      rgba(0,0,0,0.62) 0%,
+      rgba(0,0,0,var(--vn-subtitle-dark)) 0%,
       rgba(0,0,0,0.38) 18%,
       rgba(0,0,0,0.00) 46%
     );
 }
 
-/* 4) Optional: very subtle grain (軽いノイズ) */
-tw-story::after {
-  content: "";
+/* グレイン（薄め推奨） */
+tw-story::after{
+  content:"";
   position: fixed;
   inset: 0;
   pointer-events: none;
 
-  /* ラインノイズっぽい薄いグレイン */
   background-image: repeating-linear-gradient(
     0deg,
-    rgba(255,255,255,0.018) 0px,
-    rgba(255,255,255,0.018) 1px,
+    rgba(255,255,255,0.015) 0px,
+    rgba(255,255,255,0.015) 1px,
     rgba(0,0,0,0) 2px,
     rgba(0,0,0,0) 4px
   );
-
-  opacity: 0.35; /* 強すぎるなら 0.15〜0.25 に */
+  opacity: 0.22;
   mix-blend-mode: overlay;
 }
 
-/* 5) Subtitle block: fixed at bottom */
-tw-passage {
+/* 本文ブロック：画面下固定 */
+tw-passage{
   position: fixed;
   left: 50%;
-  bottom: 4.5vh;
+  bottom: var(--vn-bottom);
   transform: translateX(-50%);
 
-  width: min(56em, 94vw);
-  max-height: 48vh;
+  /* ここが改行のキモ：Harloweデフォのpadding/幅を上書き */
+  width: min(60rem, 96vw);
+  box-sizing: border-box;
+  padding: 0 var(--vn-side-padding);
+
+  max-height: 52vh;
   overflow: auto;
 
   background: transparent;
   border: none;
   box-shadow: none;
 
-  font-family: "Kiwi Maru", system-ui, -apple-system, "Segoe UI",
-               "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
-
-  /* 少しだけ小さく */
-  font-size: 1.25em;
-
-  line-height: 1.34;
+  font-family: var(--vn-font);
+  font-size: var(--vn-base-size);
+  line-height: 1.5;
   letter-spacing: 0.02em;
   text-align: left;
 
- color: #ffffff;
-  font-style: normal;
+  color: #fff;
   font-weight: 400;
   font-synthesis: none;
 
   text-shadow: none;
   -webkit-text-stroke: 0;
-
-  letter-spacing: 0.02em;
-  line-height: 1.4;
-  text-align: left;
 }
 
+/* Startだけ中央寄せ（tw-storyに class を付けられる方式なら生きる） */
+tw-story.start-center tw-passage{
+  text-align: center;
+}
 
-/* スクロールバー（長文対策：目立たせない） */
-tw-passage::-webkit-scrollbar { width: 10px; }
-tw-passage::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 999px; }
-tw-passage::-webkit-scrollbar-track { background: transparent; }
+/* タイトル・導入（れいちゃんが <span class="title"> を使う想定） */
+tw-passage .title{
+  font-size: var(--vn-title-size);
+  line-height: 1.15;
+  display: block;
+  margin: 0.25em 0 0.35em;
+}
 
-/* 6) Links: subtitle-style choices */
-tw-link, tw-link.visited {
-  color: #ffffff;
+tw-passage .lead{
+  display: block;
+  margin: 0.15em 0 1.35em;
+}
+
+/* リンク（選択肢） */
+tw-link, tw-link.visited{
+  color: #fff;
   text-decoration: underline;
   text-underline-offset: 0.18em;
   text-decoration-thickness: 2px;
-  text-shadow: inherit;
 }
+tw-link:hover{ opacity: 0.86; }
 
-tw-link:hover { opacity: 0.86; }
+/* スクロールバー（目立たせない） */
+tw-passage::-webkit-scrollbar{ width: 10px; }
+tw-passage::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,0.18);
+  border-radius: 999px;
+}
+tw-passage::-webkit-scrollbar-track{ background: transparent; }
 
-/* 7) Sidebar UI (undo/redo): keep subtle */
-tw-sidebar {
+/* サイドバー（undo/redo） */
+tw-sidebar{
   opacity: 0.20;
   transition: opacity 120ms ease-in-out;
 }
-tw-sidebar:hover { opacity: 0.85; }
+tw-sidebar:hover{ opacity: 0.85; }
 
-/* 8) Reduce accidental focus outlines (optional) */
-tw-link:focus {
-  outline: none;
-}
+tw-link:focus{ outline: none; }
 </style><script role="script" id="twine-user-script" type="text/twine-javascript"></script><tw-passagedata pid="1" name="Start" tags="" position="250,450" size="100,100">
 (align: &quot;==&gt;&lt;=&quot;)[
 &lt;span class=&quot;title&quot;&gt;真夜中の&lt;br&gt;カウンター&lt;/span&gt;
@@ -348,8 +345,7 @@ tw-link:focus {
 私は—この身体の持ち主は—何と言えばいいんだろう。
 
 [[返す言葉を選ぶ-&gt;Choice_01]]
-</tw-passagedata><tw-passagedata pid="8" name="Choice_01" tags="" position="250,700" size="100,100">:: Choice_01
-どんな言葉で返す？
+</tw-passagedata><tw-passagedata pid="8" name="Choice_01" tags="" position="250,700" size="100,100">どんな言葉で返す？
 
 (link-goto: &quot;A: 「でも、あなたは生きてる。お父さんとは違う人生を選んでいい」&quot;, &quot;A_01&quot;)[]
 
