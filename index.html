@@ -92,9 +92,13 @@ tw-story::after{
 /* 本文ブロック：画面下固定 */
 tw-passage{
   position: fixed;
-  left: 50%;
   bottom: var(--vn-bottom);
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  margin-left: auto;
+  margin-right: auto;
+  transform: none;
+  
 
   /* ここが改行のキモ：Harloweデフォのpadding/幅を上書き */
   width: min(60rem, 96vw);
