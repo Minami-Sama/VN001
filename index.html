@@ -169,6 +169,20 @@ tw-sidebar{
 tw-sidebar:hover{ opacity: 0.85; }
 
 tw-link:focus{ outline: none; }
+
+/* デバッグ */
+html::before{
+  content:"";
+  position: fixed;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(255,0,0,0.65);
+  z-index: 999999;
+  pointer-events: none;
+}
+tw-passage{ outline: 2px solid rgba(0,255,0,0.55); }
 </style><script role="script" id="twine-user-script" type="text/twine-javascript"></script><tw-passagedata pid="1" name="Start" tags="" position="250,450" size="100,100">
 (align: &quot;==&gt;&lt;=&quot;)[
 &lt;span class=&quot;title&quot;&gt;真夜中の&lt;br&gt;カウンター&lt;/span&gt;
