@@ -10,37 +10,55 @@
 <body>
 <tw-story><noscript><tw-noscript>JavaScript needs to be enabled to play Untitled Story.</tw-noscript></noscript></tw-story>
 <tw-storydata name="Untitled Story" startnode="1" creator="Twine" creator-version="2.11.1" format="Harlowe" format-version="3.3.9" ifid="CC68B00F-30AC-4B81-B505-CE5BE7B0E431" options="" tags="" zoom="1" hidden><style role="stylesheet" id="twine-user-stylesheet" type="text/twine-css">/* =========================================
-   VN Subtitle UI (Kiwi Maru) - Refactored
+   VN Subtitle UI (Dark BG + Kiwi Maru)
    Twine / Harlowe 3.3.9
+   "Ghost Sidebar Exorcism" Full Set
    ========================================= */
 
+/* Font */
 @import url("https://fonts.googleapis.com/css2?family=Kiwi+Maru&display=swap");
 
-:root{
-  --vn-font: "Kiwi Maru", system-ui, -apple-system, "Segoe UI",
-             "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
-
-  /* スマホ基準の本文サイズ：老眼配慮なら少し大きめでOK */
-  --vn-base-size: clamp(18px, 2.35vh, 22px);
-
-  /* タイトル：端末幅で自然に伸び縮み */
-  --vn-title-size: clamp(40px, 7vw, 64px);
-
-  /* 左右の余白：デフォの大きいpaddingを潰して、必要最低限だけ入れる */
-  --vn-side-padding: clamp(10px, 4vw, 22px);
-
-  /* 下からの位置：UIのホームバー等を避ける */
-  --vn-bottom: 4.5vh;
-
-  /* 下側の字幕帯の暗さ（可読性調整ここ） */
-  --vn-subtitle-dark: 0.62;
+/* ----- 0) Hard reset: margins & sizing ----- */
+html, body {
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 100% !important;
+  background: #050505;
+  overflow: hidden !important; /* 画面全体のスクロールを潰す（100vwズレ対策にもなる） */
 }
 
-tw-story{
+/* すべて box-sizing 統一（幅計算のズレ予防） */
+tw-story, tw-story * {
+  box-sizing: border-box !important;
+}
+
+/* ----- 1) EXORCISM: Kill sidebar & its layout influence ----- */
+/* 重要：opacityじゃなく “存在ごと消す” */
+tw-sidebar {
+  display: none !important;
+  width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Harlowe内部の「中央カラム」や余白を根こそぎ無効化 */
+tw-story,
+tw-story-inner {
+  margin: 0 !important;
+  padding: 0 !important;
+  max-width: none !important;
+  width: 100% !important;
+}
+
+/* ----- 2) Make tw-story truly full-screen ----- */
+tw-story {
   --bg-image: url("bg.jpg");
 
-  margin: 0;
-  padding: 0;
+  position: fixed !important;
+  inset: 0 !important;
+
+  /* width:100vw / height:100vh は端末やスクロールバーでズレるので使わない */
+  /* width: 100vw; height: 100vh;  ←削除 */
 
   background-color: #050505;
   background-image: var(--bg-image);
@@ -48,16 +66,19 @@ tw-story{
   background-position: center center;
   background-repeat: no-repeat;
 
-  /* filter は文字にもかかって劣化しやすいのでやめる */
+  overflow: hidden !important;
 }
 
-/* 画面の上にかぶせる：周辺減光＋下だけ暗くする帯 */
-tw-story::before{
-  content:"";
+/* ----- 3) Overlay effects (ON/OFFしやすい) ----- */
+/* 疑い潰ししたいなら、ここを丸ごとコメントアウトでOK */
+
+tw-story::before {
+  content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
 
+  /* ビネット + 下側暗帯 */
   background:
     radial-gradient(ellipse at center,
       rgba(0,0,0,0.00) 0%,
@@ -65,112 +86,109 @@ tw-story::before{
       rgba(0,0,0,0.55) 100%
     ),
     linear-gradient(to top,
-      rgba(0,0,0,var(--vn-subtitle-dark)) 0%,
+      rgba(0,0,0,0.62) 0%,
       rgba(0,0,0,0.38) 18%,
       rgba(0,0,0,0.00) 46%
     );
 }
 
-/* グレイン（薄め推奨） */
-tw-story::after{
-  content:"";
+tw-story::after {
+  content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
 
   background-image: repeating-linear-gradient(
     0deg,
-    rgba(255,255,255,0.015) 0px,
-    rgba(255,255,255,0.015) 1px,
+    rgba(255,255,255,0.018) 0px,
+    rgba(255,255,255,0.018) 1px,
     rgba(0,0,0,0) 2px,
     rgba(0,0,0,0) 4px
   );
-  opacity: 0.22;
+
+  opacity: 0.25;
   mix-blend-mode: overlay;
 }
 
-/* 本文ブロック：画面下固定 */
-tw-passage{
-  position: fixed;
-  bottom: var(--vn-bottom);
-  left: 0;
-  right: 0;
-  margin-left: auto;
-  margin-right: auto;
-  transform: none;
-  
+/* ----- 4) Passage layout (centered reliably; no transform centering) ----- */
+tw-passage {
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 4.5vh !important;
 
-  /* ここが改行のキモ：Harloweデフォのpadding/幅を上書き */
-  width: min(60rem, 96vw);
-  box-sizing: border-box;
-  padding: 0 var(--vn-side-padding);
+  margin-left: auto !important;
+  margin-right: auto !important;
 
-  max-height: 52vh;
-  overflow: auto;
+  width: min(56rem, 96vw) !important;
+  max-height: 52vh !important;
+  overflow: auto !important;
 
-  background: transparent;
-  border: none;
-  box-shadow: none;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
 
-  font-family: var(--vn-font);
-  font-size: var(--vn-base-size);
-  line-height: 1.5;
-  letter-spacing: 0.02em;
-  text-align: left;
+  font-family: "Kiwi Maru", system-ui, -apple-system, "Segoe UI",
+               "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
 
-  color: #fff;
-  font-weight: 400;
-  font-synthesis: none;
+  font-size: 1.25em !important;
+  line-height: 1.45 !important;
+  letter-spacing: 0.01em !important;
 
-  text-shadow: none;
-  -webkit-text-stroke: 0;
+  color: #fff !important;
+  font-style: normal !important;
+  font-weight: 400 !important;
+  font-synthesis: none !important;
+
+  text-shadow: none !important;
+  -webkit-text-stroke: 0 !important;
+
+  text-align: left !important;
+
+  /* 日本語の禁則を効かせやすくする（「ー単独改行」対策の基礎） */
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  line-break: strict !important;
+  hyphens: none !important;
 }
 
-/* Startだけ中央寄せ（tw-storyに class を付けられる方式なら生きる） */
-tw-story.start-center tw-passage{
-  text-align: center;
+/* Startだけ中央寄せ（Startパッセージに tag: start を付ける） */
+tw-passage[tags~="start"] {
+  text-align: center !important;
 }
 
-/* タイトル・導入（れいちゃんが <span class="title"> を使う想定） */
-tw-passage .title{
-  font-size: var(--vn-title-size);
-  line-height: 1.15;
+/* Title / Lead */
+tw-passage .title {
+  font-size: 2.2em;
   display: block;
-  margin: 0.25em 0 0.35em;
+  margin: 0.25em 0 0.55em;
+  /* タイトル絶対割りたくないなら下をON（画面からはみ出すならOFF） */
+  /* white-space: nowrap; */
 }
 
-tw-passage .lead{
+tw-passage .lead {
+  font-size: 1em;
   display: block;
-  margin: 0.15em 0 1.35em;
+  margin: 0.2em 0 1.4em;
 }
 
-/* リンク（選択肢） */
-tw-link, tw-link.visited{
+/* Scrollbar (subtle) */
+tw-passage::-webkit-scrollbar { width: 10px; }
+tw-passage::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 999px; }
+tw-passage::-webkit-scrollbar-track { background: transparent; }
+
+/* Links */
+tw-link, tw-link.visited {
   color: #fff;
   text-decoration: underline;
   text-underline-offset: 0.18em;
   text-decoration-thickness: 2px;
 }
-tw-link:hover{ opacity: 0.86; }
+tw-link:hover { opacity: 0.86; }
+tw-link:focus { outline: none; }
 
-/* スクロールバー（目立たせない） */
-tw-passage::-webkit-scrollbar{ width: 10px; }
-tw-passage::-webkit-scrollbar-thumb{
-  background: rgba(255,255,255,0.18);
-  border-radius: 999px;
-}
-tw-passage::-webkit-scrollbar-track{ background: transparent; }
-
-/* サイドバー（undo/redo） */
-tw-sidebar{
-  opacity: 0.20;
-  transition: opacity 120ms ease-in-out;
-}
-tw-sidebar:hover{ opacity: 0.85; }
-
-tw-link:focus{ outline: none; }
-
-/* デバッグ */
+/* ----- 5) Debug (必要なときだけ) ----- */
+/* 画面ど真ん中線：ONのままでOK。邪魔なら丸ごとコメントアウト。 */
 html::before{
   content:"";
   position: fixed;
@@ -182,15 +200,64 @@ html::before{
   z-index: 999999;
   pointer-events: none;
 }
-tw-passage{ outline: 2px solid rgba(0,255,0,0.55); }
-</style><script role="script" id="twine-user-script" type="text/twine-javascript"></script><tw-passagedata pid="1" name="Start" tags="" position="250,450" size="100,100">
-(align: &quot;==&gt;&lt;=&quot;)[
+
+/* Passage枠：ONのままでOK。邪魔ならコメントアウト。 */
+tw-passage{ outline: 2px solid rgba(0,255,0,0.55) !important; }
+
+/* =========================================
+   FIX: Keep tw-passage centered
+   (Do NOT zero margins on tw-passage itself)
+   ========================================= */
+
+/* まず、tw-passageの中央寄せを強制的に復活 */
+tw-passage{
+  left: 0 !important;
+  right: 0 !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* 中身のpaddingだけは全部ゼロでOK */
+tw-passage *{
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* ただし margin をゼロにするのは tw-align 以外に限定（alignマクロを壊さない） */
+tw-passage *:not(tw-align){
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+/* Startで tw-align が出てきても、強制センターに寄せる */
+tw-passage[tags~="start"] tw-align{
+  margin-left: auto !important;
+  margin-right: auto !important;
+  width: 100% !important;
+  text-align: center !important;
+}
+
+/* Harloweの中間ラッパーを「幅100%の箱」にして、テキスト中央寄せが効く土台を作る */
+tw-passage tw-hook,
+tw-passage tw-align,
+tw-passage tw-transition-container,
+tw-passage tw-expression{
+  display: block !important;
+  width: 100% !important;
+}
+
+
+/* Startを絶対に中央寄せ（最終勝利ルール） */
+/* Startの中は全部中央寄せにする（子孫含む） */
+tw-passage[tags~="start"] { text-align: center !important; }
+tw-passage[tags~="start"] * { text-align: center !important; }</style><script role="script" id="twine-user-script" type="text/twine-javascript"></script><tw-tag name="start" color="blue"></tw-tag><tw-passagedata pid="1" name="Start" tags="start" position="250,450" size="100,100">
+
 &lt;span class=&quot;title&quot;&gt;真夜中の&lt;br&gt;カウンター&lt;/span&gt;
 
 &lt;span class=&quot;lead&quot;&gt;※下にスクロールして&lt;br&gt;物語を進めます&lt;/span&gt;
 
 [[はじめる-&gt;Bar_01]]
-]
+
 </tw-passagedata><tw-passagedata pid="2" name="R0Intro" tags="" position="375,450" size="100,100">(put: $visited + 1 into $visited)
 
 眠れない夜。  
