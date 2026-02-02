@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TS Copy</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; max-width: 720px; margin: 0 auto; }
+    h1 { font-size: 18px; margin: 0 0 12px; }
+    button { font-size: 16px; padding: 12px 16px; cursor: pointer; }
+    pre { background: #f6f6f6; padding: 12px; border-radius: 10px; white-space: pre-wrap; }
+    #msg { margin-top: 10px; }
+    .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <h1>タイムスタンプをコピー</h1>
+
+  <div class="row">
+    <button id="copyBtn">TSをコピー</button>
+    <span id="msg" aria-live="polite"></span>
+  </div>
+
+  <div>プレビュー：</div>
+  <pre id="preview"></pre>
+
+  <script>
+    const pad2 = (n) => String(n).padStart(2, "0");
+
+    // JST(Asia/Tokyo)固定で、ISO 8601相当の "YYYY-MM-DDTHH:mm:ss+09:00" を作る
+    function formatNowJST() {
+      const now = new Date();
+      const utcMs = now.getTime() + now.getTimezoneOffset() * 60000; // いまのUTC
+      const jstMs = utcMs + 9 * 60 * 60000; // UTC+9
+      const jst = new Date(jstMs);
+
+      // jstMs は「JST時刻をUTCとして見た」値なので、UTC系ゲッターで部品を取る
+      const Y = jst.getUTCFullYear();
+      const M = pad2(jst.getUTCMonth() + 1);
+      const D = pad2(jst.getUTCDate());
+      const h = pad2(jst.getUTCHours());
+      const m = pad2(jst.getUTCMinutes());
+      const s = pad2(jst.getUTCSeconds());
+
+      return `${Y}-${M}-${D}T${h}:${m}:${s}+09:00`;
+    }
+
+    function buildText() {
+      const ts = formatNowJST();
+      // 指定フォーマット固定（最後に改行2つ入れて、続きが書きやすいように）
+      return `TS: ${ts} / ここから発言：\n\n`;
+    }
+
+    async function copyText(text) {
+      // Clipboard API（HTTPS か localhost で動く）
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+      // フォールバック（古いブラウザ向け）
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    }
+
+    const btn = document.getElementById("copyBtn");
+    const msg = document.getElementById("msg");
+    const preview = document.getElementById("preview");
+
+    function refreshPreview() {
+      preview.textContent = buildText();
+    }
+    refreshPreview();
+
+    btn.addEventListener("click", async () => {
+      const text = buildText();
+      try {
+        await copyText(text);
+        msg.textContent = "コピーしました ✅";
+        preview.textContent = text;
+        setTimeout(() => (msg.textContent = ""), 1500);
+      } catch (e) {
+        msg.textContent = "コピー失敗（ブラウザ設定 or HTTPを確認）";
+      }
+    });
+  </script>
+</body>
+</html>
