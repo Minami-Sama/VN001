@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>TS Copy (JST) + History</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 16px; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+    code { font-size: 14px; padding: 8px 10px; background: #f4f4f6; border-radius: 8px; }
+    textarea { width: 100%; height: 110px; font-size: 14px; padding: 10px; border-radius: 10px; border: 1px solid #ccc; }
+    button { padding: 10px 12px; border-radius: 10px; border: 1px solid #ccc; background: white; cursor: pointer; }
+    button.small { padding: 6px 8px; border-radius: 8px; font-size: 12px; }
+    .hint { color: #666; font-size: 12px; margin-top: 8px; line-height: 1.5; }
+    .ok { color: #0a7; font-size: 12px; }
+    h2 { margin: 18px 0 8px; font-size: 16px; }
+    .history { display:flex; flex-direction:column; gap:10px; margin-top: 8px; }
+    .item { background:#fafafb; border:1px solid #e6e6ea; border-radius: 12px; padding: 10px; }
+    .item-top { display:flex; gap:8px; align-items:center; justify-content:space-between; }
+    .item-actions { display:flex; gap:8px; align-items:center; }
+    .item pre {
+      margin: 8px 0 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #fff;
+      border: 1px solid #eee;
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+    .muted { color:#777; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <code id="ts">Loading...</code>
+    <button id="copyBtn">Copy（TS＋本文）</button>
+    <button id="copyTsBtn">Copy（TSだけ）</button>
+    <span id="msg" class="ok"></span>
+  </div>
+
+  <textarea id="msgText" placeholder="ここに発言を書く（コピーボタンで TS: ... / ここから発言： >>> とセットでコピーされる）"></textarea>
+
+  <div class="hint">
+    出力例：<br>
+    TS: 2026-02-04T02:59:55+09:00 / ここから発言： >>> ここに発言
+    <br><span class="muted">※ 履歴はこのブラウザに保存されます（localStorage）。</span>
+  </div>
+
+  <div class="row" style="margin-top:12px;">
+    <button id="clearHistoryBtn">履歴を全消去</button>
+  </div>
+
+  <h2>履歴</h2>
+  <div id="history" class="history"></div>
+
+<script>
+  const TZ = "Asia/Tokyo";
+  const OFFSET = "+09:00";
+  const STORAGE_KEY = "ts_copy_history_v1";
+  const MAX_ITEMS = 100; // 念のため上限
+
+  function getTokyoParts() {
+    const dtf = new Intl.DateTimeFormat("en-CA", {
+      timeZone: TZ,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hour12: false
+    });
+    const parts = dtf.formatToParts(new Date());
+    const get = (type) => parts.find(p => p.type === type)?.value;
+    return {
+      year: get("year"),
+      month: get("month"),
+      day: get("day"),
+      hour: get("hour"),
+      minute: get("minute"),
+      second: get("second"),
+    };
+  }
+
+  function buildTS() {
+    const p = getTokyoParts();
+    return `TS: ${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}${OFFSET}`;
+  }
+
+  function updatePreview() {
+    document.getElementById("ts").textContent = buildTS();
+  }
+
+  updatePreview();
+  setInterval(updatePreview, 1000);
+
+  async function copyToClipboard(text) {
+    const msg = document.getElementById("msg");
+    try {
+      await navigator.clipboard.writeText(text);
+      msg.textContent = "copied!";
+      setTimeout(() => msg.textContent = "", 900);
+      return true;
+    } catch (e) {
+      alert("Copy failed: " + e);
+      return false;
+    }
+  }
+
+  // ---------- History ----------
+  function loadHistory() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveHistory(items) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, MAX_ITEMS)));
+  }
+
+  function addHistory(text) {
+    const items = loadHistory();
+    items.unshift({ id: crypto.randomUUID(), text, createdAt: Date.now() });
+    saveHistory(items);
+    renderHistory();
+  }
+
+  function removeHistory(id) {
+    const items = loadHistory().filter(x => x.id !== id);
+    saveHistory(items);
+    renderHistory();
+  }
+
+  function clearHistory() {
+    localStorage.removeItem(STORAGE_KEY);
+    renderHistory();
+  }
+
+  function formatTime(ms) {
+    const d = new Date(ms);
+    // 表示はローカルでOK（履歴の「いつ追加したか」なので）
+    return d.toLocaleString();
+  }
+
+  function renderHistory() {
+    const el = document.getElementById("history");
+    const items = loadHistory();
+    el.innerHTML = "";
+
+    if (items.length === 0) {
+      const div = document.createElement("div");
+      div.className = "muted";
+      div.textContent = "（まだ履歴がありません）";
+      el.appendChild(div);
+      return;
+    }
+
+    for (const item of items) {
+      const card = document.createElement("div");
+      card.className = "item";
+
+      const top = document.createElement("div");
+      top.className = "item-top";
+
+      const meta = document.createElement("div");
+      meta.className = "muted";
+      meta.textContent = `追加: ${formatTime(item.createdAt)}`;
+
+      const actions = document.createElement("div");
+      actions.className = "item-actions";
+
+      const copyBtn = document.createElement("button");
+      copyBtn.className = "small";
+      copyBtn.textContent = "Copy";
+      copyBtn.addEventListener("click", async () => {
+        await copyToClipboard(item.text);
+      });
+
+      const delBtn = document.createElement("button");
+      delBtn.className = "small";
+      delBtn.textContent = "削除";
+      delBtn.addEventListener("click", () => removeHistory(item.id));
+
+      actions.appendChild(copyBtn);
+      actions.appendChild(delBtn);
+
+      top.appendChild(meta);
+      top.appendChild(actions);
+
+      const pre = document.createElement("pre");
+      pre.textContent = item.text;
+
+      card.appendChild(top);
+      card.appendChild(pre);
+      el.appendChild(card);
+    }
+  }
+
+  renderHistory();
+
+  // ---------- Buttons ----------
+  document.getElementById("copyBtn").addEventListener("click", async () => {
+    const ts = buildTS();
+    const body = document.getElementById("msgText").value.trim();
+    const line = `${ts} / ここから発言： >>> ${body}`;
+    if (await copyToClipboard(line)) addHistory(line);
+  });
+
+  document.getElementById("copyTsBtn").addEventListener("click", async () => {
+    const ts = buildTS();
+    if (await copyToClipboard(ts)) addHistory(ts);
+  });
+
+  document.getElementById("clearHistoryBtn").addEventListener("click", () => {
+    if (confirm("履歴を全消去しますか？")) clearHistory();
+  });
+
+  // Optional: Ctrl+Enter で Copy（TS＋本文）
+  document.getElementById("msgText").addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+      document.getElementById("copyBtn").click();
+    }
+  });
+</script>
+</body>
+</html>
