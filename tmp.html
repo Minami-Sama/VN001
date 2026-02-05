@@ -14,15 +14,39 @@ body {
   background: #000;
 }
 
-#controls {
-  position: sticky;
-  top: 0;
+#settingsButton {
+  position: fixed;
+  top: 10px;
+  right: 10px;
   background: #2a2a2a;
-  padding: 15px;
+  color: #fff;
+  border: 1px solid #444;
+  padding: 10px 15px;
+  border-radius: 5px;
+  cursor: pointer;
+  z-index: 101;
+  font-family: sans-serif;
+  font-size: 14px;
+}
+
+#controls {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: #2a2a2a;
+  padding: 50px 15px 15px 15px;
   max-width: 480px;
   margin: 0 auto;
   z-index: 100;
   box-sizing: border-box;
+  display: none;
+  max-height: 100vh;
+  overflow-y: auto;
+}
+
+#controls.open {
+  display: block;
 }
 
 .control-group {
@@ -75,11 +99,12 @@ body {
 </head>
 <body>
 
+<button id="settingsButton">設定</button>
+
 <div id="controls">
   <div class="control-group">
     <label>フォント</label>
     <select id="fontSelect">
-      <option value="'Kiwi Maru', cursive">Kiwi Maru</option>
       <option value="'Noto Sans JP', sans-serif">Noto Sans JP (ゴシック)</option>
       <option value="'Noto Serif JP', serif">Noto Serif JP (明朝)</option>
       <option value="'Zen Kaku Gothic New', sans-serif">Zen角ゴシック</option>
@@ -88,6 +113,7 @@ body {
       <option value="'Sawarabi Mincho', serif">さわらび明朝</option>
       <option value="'Klee One', cursive">クレー</option>
       <option value="'Shippori Mincho', serif">しっぽり明朝</option>
+      <option value="'Kiwi Maru', cursive" selected>Kiwi Maru</option>
     </select>
   </div>
   
@@ -2051,6 +2077,18 @@ for (let i = 0; i < lines.length; i += LINES_PER_BLOCK) {
   
   viewer.appendChild(block);
 }
+
+// 設定パネルの開閉
+const settingsButton = document.getElementById('settingsButton');
+const controls = document.getElementById('controls');
+
+settingsButton.addEventListener('click', () => {
+  controls.classList.toggle('open');
+  settingsButton.textContent = controls.classList.contains('open') ? '閉じる' : '設定';
+});
+
+// 初期設定を適用
+viewer.style.fontFamily = "'Kiwi Maru', cursive";
 
 // コントロール
 const fontSelect = document.getElementById('fontSelect');
