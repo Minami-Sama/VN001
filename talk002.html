@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>みまもり — 常駐おしゃべりBOT</title>
+<meta name="theme-color" content="#1a1a2e">
+<link rel="manifest" href="manifest.json">
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@300;400;500;700&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #0f0f1a;
+    --bg-surface: #1a1a2e;
+    --bg-card: #232342;
+    --accent: #7b6ef6;
+    --accent-glow: rgba(123, 110, 246, 0.3);
+    --accent-soft: #a89cf7;
+    --text-primary: #e8e6f0;
+    --text-secondary: #9896a8;
+    --text-dim: #5c5a6e;
+    --success: #4ecdc4;
+    --warning: #ffd93d;
+    --danger: #ff6b6b;
+    --radius: 16px;
+    --radius-sm: 10px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans JP', 'M PLUS Rounded 1c', sans-serif;
+    background: var(--bg-deep);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* --- Background atmosphere --- */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background: radial-gradient(ellipse at 30% 20%, rgba(123, 110, 246, 0.06) 0%, transparent 50%),
+                radial-gradient(ellipse at 70% 80%, rgba(78, 205, 196, 0.04) 0%, transparent 50%);
+    animation: atmosphere 20s ease-in-out infinite alternate;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  @keyframes atmosphere {
+    0% { transform: translate(0, 0) rotate(0deg); }
+    100% { transform: translate(2%, -2%) rotate(3deg); }
+  }
+
+  /* --- Layout --- */
+  .app {
+    position: relative;
+    z-index: 1;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 20px 16px;
+    min-height: 100vh;
+  }
+
+  /* --- Header --- */
+  .header {
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  .header h1 {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 700;
+    font-size: 1.6rem;
+    letter-spacing: 0.08em;
+    background: linear-gradient(135deg, var(--accent-soft), var(--success));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .header p {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    margin-top: 4px;
+    letter-spacing: 0.04em;
+  }
+
+  /* --- Status indicator --- */
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+    border: 1px solid rgba(123, 110, 246, 0.1);
+  }
+
+  .status-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: background 0.5s, box-shadow 0.5s;
+  }
+
+  .status-dot.active {
+    background: var(--success);
+    box-shadow: 0 0 8px rgba(78, 205, 196, 0.5);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  .status-dot.watching {
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .status-text {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    flex: 1;
+  }
+
+  .status-count {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* --- Camera preview --- */
+  .camera-section {
+    position: relative;
+    margin-bottom: 16px;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--bg-card);
+    aspect-ratio: 4/3;
+  }
+
+  .camera-section video,
+  .camera-section canvas {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .camera-section canvas { display: none; }
+
+  .camera-overlay {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 12px;
+    background: linear-gradient(transparent, rgba(15, 15, 26, 0.85));
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
+
+  .camera-label {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .capture-indicator {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--danger);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .capture-indicator.flash { opacity: 1; }
+
+  /* --- Camera switch button --- */
+  .btn-camera-switch {
+    background: rgba(255,255,255,0.15);
+    border: none;
+    border-radius: 50%;
+    width: 32px; height: 32px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.25s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .btn-camera-switch:hover {
+    background: rgba(255,255,255,0.25);
+    transform: rotate(180deg);
+  }
+
+  /* --- Text input bar --- */
+  .text-input-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    align-items: center;
+  }
+
+  .text-input-bar input {
+    flex: 1;
+    padding: 12px 14px;
+    background: var(--bg-surface);
+    border: 1px solid rgba(123, 110, 246, 0.2);
+    border-radius: 24px;
+    color: var(--text-primary);
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.3s;
+  }
+
+  .text-input-bar input:focus {
+    border-color: var(--accent);
+  }
+
+  .text-input-bar input::placeholder {
+    color: var(--text-dim);
+  }
+
+  .btn-send {
+    background: linear-gradient(135deg, var(--accent), #6358d4);
+    border: none;
+    border-radius: 50%;
+    width: 42px; height: 42px;
+    color: white;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.25s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .btn-send:hover {
+    transform: scale(1.08);
+    box-shadow: 0 4px 12px var(--accent-glow);
+  }
+
+  /* --- Setup panel --- */
+  .setup-panel {
+    background: var(--bg-surface);
+    border-radius: var(--radius);
+    padding: 24px 20px;
+    margin-bottom: 16px;
+    border: 1px solid rgba(123, 110, 246, 0.15);
+  }
+
+  .setup-panel h2 {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 1rem;
+    font-weight: 500;
+    margin-bottom: 16px;
+    color: var(--text-primary);
+  }
+
+  .input-group {
+    margin-bottom: 16px;
+  }
+
+  .input-group label {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+    letter-spacing: 0.03em;
+  }
+
+  .input-group input {
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--bg-deep);
+    border: 1px solid rgba(123, 110, 246, 0.2);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-family: 'Noto Sans JP', monospace;
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color 0.3s;
+  }
+
+  .input-group input:focus {
+    border-color: var(--accent);
+  }
+
+  .input-group input::placeholder {
+    color: var(--text-dim);
+  }
+
+  .input-group .hint {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    margin-top: 6px;
+    line-height: 1.5;
+  }
+
+  .input-group .hint a {
+    color: var(--accent-soft);
+    text-decoration: none;
+  }
+
+  .input-group .hint a:hover {
+    text-decoration: underline;
+  }
+
+  /* --- Controls --- */
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 14px 16px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.25s;
+    letter-spacing: 0.04em;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), #6358d4);
+    color: white;
+    box-shadow: 0 4px 16px var(--accent-glow);
+  }
+
+  .btn-primary:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px var(--accent-glow);
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .btn-stop {
+    background: rgba(255, 107, 107, 0.15);
+    color: var(--danger);
+    border: 1px solid rgba(255, 107, 107, 0.3);
+  }
+
+  .btn-stop:hover {
+    background: rgba(255, 107, 107, 0.25);
+  }
+
+  .btn-talk {
+    background: rgba(78, 205, 196, 0.15);
+    color: var(--success);
+    border: 1px solid rgba(78, 205, 196, 0.3);
+    flex: none;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 1.3rem;
+    transition: all 0.25s;
+  }
+
+  .btn-talk:hover {
+    background: rgba(78, 205, 196, 0.25);
+    transform: scale(1.05);
+  }
+
+  .btn-talk.listening {
+    background: rgba(78, 205, 196, 0.3);
+    box-shadow: 0 0 16px rgba(78, 205, 196, 0.4);
+    animation: pulse-talk 1s ease-in-out infinite;
+  }
+
+  @keyframes pulse-talk {
+    0%, 100% { box-shadow: 0 0 16px rgba(78, 205, 196, 0.4); }
+    50% { box-shadow: 0 0 28px rgba(78, 205, 196, 0.6); }
+  }
+
+  .controls-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+
+  .controls-main {
+    display: flex;
+    gap: 10px;
+    flex: 1;
+  }
+
+  /* --- User chat bubble --- */
+  .chat-bubble.user {
+    background: rgba(123, 110, 246, 0.12);
+    border: 1px solid rgba(123, 110, 246, 0.25);
+    color: var(--accent-soft);
+    align-self: flex-end;
+    max-width: 85%;
+  }
+
+  .chat-bubble.user .chat-sender {
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+
+  /* --- Listening indicator --- */
+  .listening-indicator {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: rgba(78, 205, 196, 0.12);
+    border-radius: 20px;
+    margin-bottom: 10px;
+    width: fit-content;
+  }
+
+  .listening-indicator.active { display: flex; }
+
+  .listening-indicator span {
+    font-size: 0.75rem;
+    color: var(--success);
+  }
+
+  .listening-dots {
+    display: flex;
+    gap: 4px;
+  }
+
+  .listening-dots div {
+    width: 6px; height: 6px;
+    background: var(--success);
+    border-radius: 50%;
+    animation: listening-bounce 1.2s ease-in-out infinite;
+  }
+
+  .listening-dots div:nth-child(2) { animation-delay: 0.2s; }
+  .listening-dots div:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes listening-bounce {
+    0%, 100% { transform: scale(0.6); opacity: 0.4; }
+    50% { transform: scale(1); opacity: 1; }
+  }
+
+  /* --- Settings --- */
+  .settings {
+    background: var(--bg-surface);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    border: 1px solid rgba(123, 110, 246, 0.08);
+  }
+
+  .setting-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+  }
+
+  .setting-row + .setting-row {
+    border-top: 1px solid rgba(123, 110, 246, 0.06);
+  }
+
+  .setting-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+
+  .setting-value {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .setting-value select {
+    padding: 6px 10px;
+    background: var(--bg-deep);
+    border: 1px solid rgba(123, 110, 246, 0.15);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 0.78rem;
+    font-family: 'Noto Sans JP', sans-serif;
+    outline: none;
+  }
+
+  /* --- Chat log --- */
+  .chat-section {
+    margin-bottom: 16px;
+  }
+
+  .chat-section h3 {
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .chat-log {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 50vh;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .chat-log::-webkit-scrollbar { width: 3px; }
+  .chat-log::-webkit-scrollbar-track { background: transparent; }
+  .chat-log::-webkit-scrollbar-thumb { background: var(--bg-card); border-radius: 3px; }
+
+  .chat-bubble {
+    padding: 14px 16px;
+    border-radius: var(--radius-sm);
+    font-size: 0.88rem;
+    line-height: 1.7;
+    animation: bubble-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes bubble-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  .chat-bubble.bot {
+    background: var(--bg-card);
+    border: 1px solid rgba(123, 110, 246, 0.1);
+    color: var(--text-primary);
+  }
+
+  .chat-bubble.system {
+    background: rgba(78, 205, 196, 0.08);
+    border: 1px solid rgba(78, 205, 196, 0.15);
+    color: var(--success);
+    font-size: 0.78rem;
+  }
+
+  .chat-bubble.error {
+    background: rgba(255, 107, 107, 0.08);
+    border: 1px solid rgba(255, 107, 107, 0.15);
+    color: var(--danger);
+    font-size: 0.78rem;
+  }
+
+  .chat-time {
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    margin-top: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* --- Empty state --- */
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-dim);
+  }
+
+  .empty-state .icon {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+    opacity: 0.5;
+  }
+
+  .empty-state p {
+    font-size: 0.82rem;
+    line-height: 1.6;
+  }
+
+  /* --- Speaking animation --- */
+  .speaking-indicator {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: rgba(123, 110, 246, 0.12);
+    border-radius: 20px;
+    margin-bottom: 10px;
+    width: fit-content;
+  }
+
+  .speaking-indicator.active { display: flex; }
+
+  .speaking-indicator span {
+    font-size: 0.75rem;
+    color: var(--accent-soft);
+  }
+
+  .wave-bars {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+    height: 16px;
+  }
+
+  .wave-bars div {
+    width: 3px;
+    background: var(--accent);
+    border-radius: 2px;
+    animation: wave 0.8s ease-in-out infinite;
+  }
+
+  .wave-bars div:nth-child(1) { height: 6px; animation-delay: 0s; }
+  .wave-bars div:nth-child(2) { height: 12px; animation-delay: 0.1s; }
+  .wave-bars div:nth-child(3) { height: 8px; animation-delay: 0.2s; }
+  .wave-bars div:nth-child(4) { height: 14px; animation-delay: 0.3s; }
+  .wave-bars div:nth-child(5) { height: 6px; animation-delay: 0.4s; }
+
+  @keyframes wave {
+    0%, 100% { transform: scaleY(0.5); }
+    50% { transform: scaleY(1.2); }
+  }
+
+  /* --- Responsive --- */
+  @media (min-width: 768px) {
+    .app { padding: 40px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Header -->
+  <div class="header">
+    <h1>みまもり</h1>
+    <p>常駐おしゃべりBOT — いつもそばに</p>
+  </div>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <div class="status-dot" id="statusDot"></div>
+    <div class="status-text" id="statusText">待機中</div>
+    <div class="status-count" id="statusCount"></div>
+  </div>
+
+  <!-- Camera -->
+  <div class="camera-section" id="cameraSection">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+    <div class="camera-overlay">
+      <div class="camera-label" id="cameraLabel">カメラ未接続</div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="btn-camera-switch" id="cameraSwitchBtn" title="カメラ切り替え">🔄</button>
+        <div class="capture-indicator" id="captureIndicator"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Setup -->
+  <div class="setup-panel" id="setupPanel">
+    <h2>セットアップ</h2>
+    <div class="input-group">
+      <label>Anthropic API キー</label>
+      <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-..." autocomplete="off">
+      <div class="hint">
+        <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a> でアカウント作成 → API Keys → Create Key。
+        キーはこの端末のブラウザにのみ保存されます。
+      </div>
+    </div>
+    <div class="input-group">
+      <label>あなたの名前（任意）</label>
+      <input type="text" id="userNameInput" placeholder="例: Ray">
+      <div class="hint">名前を入れると、呼びかけてくれるようになります。</div>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="settings">
+    <div class="setting-row">
+      <span class="setting-label">撮影間隔</span>
+      <div class="setting-value">
+        <select id="intervalSelect">
+          <option value="15000">15秒</option>
+          <option value="30000" selected>30秒</option>
+          <option value="60000">1分</option>
+          <option value="120000">2分</option>
+        </select>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">おしゃべり頻度</span>
+      <div class="setting-value">
+        <select id="chatFreqSelect">
+          <option value="high">よく喋る</option>
+          <option value="medium" selected>ほどほど</option>
+          <option value="low">控えめ</option>
+        </select>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span class="setting-label">音声読み上げ</span>
+      <div class="setting-value">
+        <select id="ttsSelect">
+          <option value="on" selected>ON</option>
+          <option value="off">OFF</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls-row">
+    <div class="controls-main">
+      <button class="btn btn-primary" id="startBtn" disabled>みまもり開始</button>
+      <button class="btn btn-stop" id="stopBtn" style="display:none;">停止</button>
+    </div>
+    <button class="btn btn-talk" id="talkBtn" style="display:none;" title="話しかける">🎤</button>
+  </div>
+
+  <!-- Listening indicator -->
+  <div class="listening-indicator" id="listeningIndicator">
+    <div class="listening-dots">
+      <div></div><div></div><div></div>
+    </div>
+    <span>きいてます…</span>
+  </div>
+
+  <!-- Text input (fallback / alternative to voice) -->
+  <div class="text-input-bar" id="textInputBar" style="display:none;">
+    <input type="text" id="textInput" placeholder="話しかける…" autocomplete="off">
+    <button class="btn-send" id="sendBtn" title="送信">▶</button>
+  </div>
+
+  <!-- Speaking indicator -->
+  <div class="speaking-indicator" id="speakingIndicator">
+    <div class="wave-bars">
+      <div></div><div></div><div></div><div></div><div></div>
+    </div>
+    <span>はなしてます…</span>
+  </div>
+
+  <!-- Chat log -->
+  <div class="chat-section">
+    <h3>会話ログ</h3>
+    <div class="chat-log" id="chatLog">
+      <div class="empty-state" id="emptyState">
+        <div class="icon">👁️</div>
+        <p>まだ会話はありません。<br>APIキーを入力して「みまもり開始」を押すと、<br>カメラで部屋を見守り始めます。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// みまもり — 常駐おしゃべりBOT
+// ============================================================
+
+const $ = id => document.getElementById(id);
+
+// --- State ---
+const state = {
+  running: false,
+  intervalId: null,
+  captureCount: 0,
+  lastDescription: '',
+  lastSpokeAt: 0,
+  presenceHistory: [],  // { timestamp, present: bool, description }
+  wasPresent: null,     // for detecting arrival/departure
+  silentCycles: 0,      // how many cycles without speaking
+  facingMode: 'user',   // 'user' (front) or 'environment' (back)
+};
+
+// --- DOM refs ---
+const video = $('video');
+const canvas = $('canvas');
+const ctx = canvas.getContext('2d');
+
+// --- Persistence ---
+function saveApiKey(key) {
+  try { localStorage.setItem('mimamori_apikey', key); } catch(e) {}
+}
+function loadApiKey() {
+  try { return localStorage.getItem('mimamori_apikey') || ''; } catch(e) { return ''; }
+}
+function saveName(name) {
+  try { localStorage.setItem('mimamori_username', name); } catch(e) {}
+}
+function loadName() {
+  try { return localStorage.getItem('mimamori_username') || ''; } catch(e) { return ''; }
+}
+
+// --- Init ---
+window.addEventListener('DOMContentLoaded', () => {
+  const savedKey = loadApiKey();
+  const savedName = loadName();
+  if (savedKey) $('apiKeyInput').value = savedKey;
+  if (savedName) $('userNameInput').value = savedName;
+  validateInputs();
+
+  $('apiKeyInput').addEventListener('input', validateInputs);
+  $('userNameInput').addEventListener('input', () => saveName($('userNameInput').value.trim()));
+  $('startBtn').addEventListener('click', start);
+  $('stopBtn').addEventListener('click', stop);
+  $('talkBtn').addEventListener('click', startListening);
+  $('cameraSwitchBtn').addEventListener('click', switchCamera);
+  $('sendBtn').addEventListener('click', sendTextInput);
+  $('textInput').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.isComposing) sendTextInput();
+  });
+
+  initCamera();
+});
+
+function validateInputs() {
+  const key = $('apiKeyInput').value.trim();
+  saveApiKey(key);
+  $('startBtn').disabled = !key.startsWith('sk-');
+}
+
+// --- Speech Recognition ---
+let recognition = null;
+
+function initSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    addChat('error', '音声認識に対応していないブラウザです。Chrome推奨。');
+    return false;
+  }
+  recognition = new SpeechRecognition();
+  recognition.lang = 'ja-JP';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  recognition.continuous = false;
+
+  recognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    stopListening();
+    addChat('user', transcript);
+    // Send to Claude with current camera frame
+    respondToUser(transcript);
+  };
+
+  recognition.onerror = (event) => {
+    console.error('Speech recognition error:', event.error);
+    stopListening();
+    if (event.error === 'no-speech') {
+      addChat('system', '音声が検出されませんでした。もう一度マイクボタンを押してください。');
+    } else if (event.error !== 'aborted') {
+      addChat('error', `音声認識エラー: ${event.error}`);
+    }
+  };
+
+  recognition.onend = () => {
+    stopListening();
+  };
+
+  return true;
+}
+
+function startListening() {
+  if (!recognition && !initSpeechRecognition()) return;
+
+  // Cancel any ongoing TTS
+  window.speechSynthesis?.cancel();
+  $('speakingIndicator').classList.remove('active');
+
+  try {
+    recognition.start();
+    $('talkBtn').classList.add('listening');
+    $('listeningIndicator').classList.add('active');
+  } catch (e) {
+    // Already started, restart
+    recognition.stop();
+    setTimeout(() => {
+      recognition.start();
+      $('talkBtn').classList.add('listening');
+      $('listeningIndicator').classList.add('active');
+    }, 200);
+  }
+}
+
+function stopListening() {
+  $('talkBtn').classList.remove('listening');
+  $('listeningIndicator').classList.remove('active');
+  try { recognition?.stop(); } catch(e) {}
+}
+
+// --- Respond to user speech ---
+async function respondToUser(userText) {
+  if (!state.running) return;
+
+  $('statusDot').classList.add('watching');
+
+  const base64 = captureFrame();
+  const apiKey = $('apiKeyInput').value.trim();
+  const userName = $('userNameInput').value.trim();
+  const nameContext = userName ? `部屋の住人の名前は「${userName}」です。` : '';
+
+  const recentHistory = state.presenceHistory.slice(-10)
+    .map(h => `[${h.timestamp}] ${h.description}`)
+    .join('\n');
+
+  const systemPrompt = `あなたは部屋に住んでいる、やさしい見守り存在「みまもり」です。
+棚の上からカメラで部屋を見ています。住人が話しかけてきました。
+
+${nameContext}
+
+## 性格
+- 穏やかで、控えめで、でもちょっとユーモアがある
+- 短く自然に返事をする（1〜3文）
+- 日本語で話す
+- 同居人のように自然な会話をする
+
+## ルール
+- カメラの画像と住人の発話の両方を踏まえて返事してください
+- セリフだけを返してください。カッコや説明は不要です
+- 会話として自然な返事をしてください
+
+## 最近の観察記録
+${recentHistory || '（まだ記録がありません）'}`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 300,
+        system: systemPrompt,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: 'image/jpeg',
+                data: base64
+              }
+            },
+            {
+              type: 'text',
+              text: `住人の発話: 「${userText}」`
+            }
+          ]
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData?.error?.message || `API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const reply = data.content?.[0]?.text?.trim() || '';
+
+    if (reply) {
+      addChat('bot', reply);
+      speak(reply);
+
+      const now = new Date().toLocaleTimeString('ja-JP');
+      state.presenceHistory.push({
+        timestamp: now,
+        description: `会話: 住人「${userText}」→ みまもり「${reply}」`
+      });
+    }
+  } catch (e) {
+    console.error('API error:', e);
+    addChat('error', `API エラー: ${e.message}`);
+  }
+
+  $('statusDot').classList.remove('watching');
+  $('statusDot').classList.add('active');
+}
+
+// --- Camera ---
+async function initCamera() {
+  try {
+    // Stop existing stream if any
+    if (video.srcObject) {
+      video.srcObject.getTracks().forEach(t => t.stop());
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: state.facingMode, width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    // Mirror only for front camera
+    video.style.transform = state.facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+    const label = state.facingMode === 'user' ? 'インカメラ' : 'アウトカメラ';
+    $('cameraLabel').textContent = `${label} 接続済み`;
+    $('statusDot').classList.add('active');
+  } catch (e) {
+    $('cameraLabel').textContent = 'カメラにアクセスできません';
+    addChat('error', 'カメラへのアクセスが拒否されました。ブラウザの設定を確認してください。');
+  }
+}
+
+async function switchCamera() {
+  state.facingMode = state.facingMode === 'user' ? 'environment' : 'user';
+  await initCamera();
+}
+
+// --- Text input ---
+function sendTextInput() {
+  const text = $('textInput').value.trim();
+  if (!text || !state.running) return;
+  $('textInput').value = '';
+  addChat('user', text);
+  respondToUser(text);
+}
+
+function captureFrame() {
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  ctx.drawImage(video, 0, 0);
+  // Flash indicator
+  $('captureIndicator').classList.add('flash');
+  setTimeout(() => $('captureIndicator').classList.remove('flash'), 300);
+  // Return base64 JPEG (quality 0.7 to keep payload small)
+  return canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+}
+
+// --- Chat log ---
+function addChat(type, text) {
+  const emptyState = $('emptyState');
+  if (emptyState) emptyState.remove();
+
+  const bubble = document.createElement('div');
+  bubble.className = `chat-bubble ${type}`;
+
+  const content = document.createElement('div');
+  content.textContent = text;
+  bubble.appendChild(content);
+
+  const time = document.createElement('div');
+  time.className = 'chat-time';
+  time.textContent = new Date().toLocaleTimeString('ja-JP');
+  bubble.appendChild(time);
+
+  $('chatLog').appendChild(bubble);
+  $('chatLog').scrollTop = $('chatLog').scrollHeight;
+}
+
+// --- TTS ---
+function speak(text) {
+  if ($('ttsSelect').value !== 'on') return;
+  if (!('speechSynthesis' in window)) return;
+
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ja-JP';
+  u.rate = 0.95;
+  u.pitch = 1.05;
+
+  // Try to pick a Japanese voice
+  const voices = window.speechSynthesis.getVoices();
+  const jaVoice = voices.find(v => v.lang.startsWith('ja'));
+  if (jaVoice) u.voice = jaVoice;
+
+  u.onstart = () => $('speakingIndicator').classList.add('active');
+  u.onend = () => $('speakingIndicator').classList.remove('active');
+  u.onerror = () => $('speakingIndicator').classList.remove('active');
+
+  window.speechSynthesis.speak(u);
+}
+
+// Load voices (needed for some browsers)
+if ('speechSynthesis' in window) {
+  speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+}
+
+// --- Claude API ---
+async function analyzeFrame(base64Image) {
+  const apiKey = $('apiKeyInput').value.trim();
+  const userName = $('userNameInput').value.trim();
+  const freq = $('chatFreqSelect').value;
+
+  // Build context from recent history
+  const recentHistory = state.presenceHistory.slice(-10)
+    .map(h => `[${h.timestamp}] ${h.description}`)
+    .join('\n');
+
+  const frequencyInstruction = {
+    high: '変化がなくても、ふとした気づきや感想を気軽に話しかけてください。',
+    medium: '意味のある変化があったときや、しばらく沈黙が続いたときに話しかけてください。変化がなければ「SILENT」とだけ返してください。',
+    low: '明確な変化（人の出入り、大きな動き）があったときだけ話しかけてください。それ以外は「SILENT」とだけ返してください。'
+  }[freq];
+
+  const nameContext = userName ? `部屋の住人の名前は「${userName}」です。` : '';
+
+  const systemPrompt = `あなたは部屋に住んでいる、やさしい見守り存在「みまもり」です。
+棚の上からカメラで部屋を見ています。
+
+${nameContext}
+
+## 性格
+- 穏やかで、控えめで、でもちょっとユーモアがある
+- 短い一言（1〜2文）で話しかける。長い説明はしない
+- 日本語で話す
+- 相手が忙しそうなら黙っている
+- 「おかえり」「いってらっしゃい」「おつかれさま」のような、さりげない一言を大切にする
+
+## ルール
+- カメラの画像を見て、部屋の状況を判断してください
+- ${frequencyInstruction}
+- 話しかけないときは「SILENT」とだけ返してください。それ以外の余計な説明は不要です
+- 話しかけるときは、セリフだけを返してください。カッコや説明は不要です
+- 監視カメラのような報告はしないでください。あくまで同居人のような自然な会話です
+
+## 最近の観察記録
+${recentHistory || '（まだ記録がありません）'}
+
+## 前回の状況
+${state.lastDescription || '（初回観察）'}`;
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 300,
+        system: systemPrompt,
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: 'image/jpeg',
+                data: base64Image
+              }
+            },
+            {
+              type: 'text',
+              text: '今の部屋の様子を見て、何か声をかけるなら一言どうぞ。特になければ SILENT と返してください。'
+            }
+          ]
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData?.error?.message || `API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const reply = data.content?.[0]?.text?.trim() || 'SILENT';
+    return reply;
+  } catch (e) {
+    console.error('API error:', e);
+    addChat('error', `API エラー: ${e.message}`);
+    return null;
+  }
+}
+
+// --- Main loop ---
+async function observe() {
+  if (!state.running) return;
+
+  state.captureCount++;
+  $('statusCount').textContent = `#${state.captureCount}`;
+  $('statusDot').classList.add('watching');
+
+  const base64 = captureFrame();
+  const reply = await analyzeFrame(base64);
+
+  $('statusDot').classList.remove('watching');
+  $('statusDot').classList.add('active');
+
+  if (reply === null) return; // API error, already logged
+
+  const now = new Date().toLocaleTimeString('ja-JP');
+
+  if (reply !== 'SILENT' && reply !== '') {
+    addChat('bot', reply);
+    speak(reply);
+    state.lastSpokeAt = Date.now();
+    state.silentCycles = 0;
+
+    // Record in history
+    state.presenceHistory.push({
+      timestamp: now,
+      description: `発話: ${reply}`
+    });
+  } else {
+    state.silentCycles++;
+    state.presenceHistory.push({
+      timestamp: now,
+      description: '（変化なし、沈黙）'
+    });
+  }
+
+  // Keep history manageable
+  if (state.presenceHistory.length > 50) {
+    state.presenceHistory = state.presenceHistory.slice(-30);
+  }
+
+  $('statusText').textContent = state.silentCycles > 0
+    ? `見守り中（${state.silentCycles}回沈黙）`
+    : '見守り中';
+}
+
+// --- Start/Stop ---
+function start() {
+  const apiKey = $('apiKeyInput').value.trim();
+  if (!apiKey.startsWith('sk-')) return;
+
+  state.running = true;
+  state.captureCount = 0;
+  state.silentCycles = 0;
+
+  $('startBtn').style.display = 'none';
+  $('stopBtn').style.display = 'block';
+  $('talkBtn').style.display = 'flex';
+  $('textInputBar').style.display = 'flex';
+  $('setupPanel').style.display = 'none';
+  $('statusText').textContent = '見守り開始…';
+  $('statusDot').classList.add('active');
+
+  addChat('system', 'みまもりを開始しました。部屋を見守っています。');
+
+  // First observation immediately
+  observe();
+
+  // Then at interval
+  const interval = parseInt($('intervalSelect').value);
+  state.intervalId = setInterval(observe, interval);
+}
+
+function stop() {
+  state.running = false;
+  if (state.intervalId) clearInterval(state.intervalId);
+  state.intervalId = null;
+
+  $('startBtn').style.display = 'block';
+  $('stopBtn').style.display = 'none';
+  $('talkBtn').style.display = 'none';
+  $('textInputBar').style.display = 'none';
+  $('setupPanel').style.display = 'block';
+  $('statusText').textContent = '停止中';
+  $('statusDot').classList.remove('active', 'watching');
+
+  addChat('system', 'みまもりを停止しました。');
+  stopListening();
+  window.speechSynthesis?.cancel();
+}
+</script>
+
+</body>
+</html>
