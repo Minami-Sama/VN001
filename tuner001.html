@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intonation Mirror</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=Noto+Sans+JP:wght@300;400&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --flat-color: 60, 120, 255;
+    --sharp-color: 255, 70, 70;
+    --just-color: 255, 255, 255;
+    --bg: #0a0a0c;
+  }
+
+  body {
+    background: var(--bg);
+    color: #fff;
+    font-family: 'JetBrains Mono', 'Noto Sans JP', monospace;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    transition: background-color 0.15s ease;
+  }
+
+  #feedback-glow {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s ease, background 0.12s ease;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+  }
+
+  #note-display {
+    font-size: 8rem;
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    color: rgba(255,255,255,0.9);
+    text-shadow: 0 0 40px rgba(255,255,255,0.1);
+    min-width: 280px;
+    text-align: center;
+    transition: color 0.1s ease;
+  }
+
+  #cents-display {
+    font-size: 1.8rem;
+    font-weight: 300;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 0.1em;
+    height: 2.5rem;
+  }
+
+  #freq-display {
+    font-size: 0.9rem;
+    font-weight: 300;
+    color: rgba(255,255,255,0.2);
+    letter-spacing: 0.15em;
+  }
+
+  /* Deviation bar */
+  #deviation-bar-container {
+    width: min(500px, 80vw);
+    height: 6px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 3px;
+    position: relative;
+    margin: 1rem 0;
+  }
+
+  #deviation-center {
+    position: absolute;
+    left: 50%;
+    top: -4px;
+    width: 2px;
+    height: 14px;
+    background: rgba(255,255,255,0.15);
+    transform: translateX(-50%);
+  }
+
+  #deviation-marker {
+    position: absolute;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: white;
+    transform: translate(-50%, -50%);
+    left: 50%;
+    transition: left 0.08s ease, background-color 0.1s ease, box-shadow 0.1s ease;
+  }
+
+  /* Start button */
+  #start-btn {
+    padding: 1rem 3rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1rem;
+    font-weight: 400;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    background: transparent;
+    color: rgba(255,255,255,0.6);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  #start-btn:hover {
+    color: rgba(255,255,255,0.9);
+    border-color: rgba(255,255,255,0.4);
+    box-shadow: 0 0 30px rgba(255,255,255,0.05);
+  }
+
+  #start-btn.active {
+    display: none;
+  }
+
+  /* Status text */
+  #status {
+    font-size: 0.75rem;
+    font-weight: 300;
+    color: rgba(255,255,255,0.2);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    position: fixed;
+    bottom: 2rem;
+  }
+
+  /* Settings */
+  #settings {
+    position: fixed;
+    top: 1.5rem;
+    right: 1.5rem;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    font-size: 0.75rem;
+    color: rgba(255,255,255,0.3);
+    letter-spacing: 0.1em;
+  }
+
+  #settings label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  #settings input[type="number"] {
+    width: 4rem;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.6);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 2px;
+    text-align: center;
+  }
+
+  #settings input[type="number"]:focus {
+    outline: none;
+    border-color: rgba(255,255,255,0.3);
+  }
+
+  /* Idle state */
+  .idle #note-display {
+    color: rgba(255,255,255,0.08);
+  }
+
+  .idle #note-display::after {
+    content: '♪';
+  }
+
+  /* Title */
+  #title {
+    position: fixed;
+    top: 1.5rem;
+    left: 1.5rem;
+    font-size: 0.7rem;
+    font-weight: 300;
+    color: rgba(255,255,255,0.15);
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+  }
+
+  /* Threshold hint */
+  #threshold-hint {
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.15);
+    letter-spacing: 0.1em;
+    margin-top: -0.5rem;
+  }
+</style>
+</head>
+<body class="idle">
+
+<div id="title">Intonation Mirror</div>
+
+<div id="settings">
+  <label>
+    A4 =
+    <input type="number" id="base-freq" value="442" min="420" max="460" step="1">
+    Hz
+  </label>
+</div>
+
+<div id="feedback-glow"></div>
+
+<div class="container">
+  <div id="note-display"></div>
+  <div id="cents-display"></div>
+
+  <div id="deviation-bar-container">
+    <div id="deviation-center"></div>
+    <div id="deviation-marker"></div>
+  </div>
+
+  <div id="freq-display"></div>
+  <div id="threshold-hint">± 10 cents = just</div>
+
+  <button id="start-btn">START</button>
+</div>
+
+<div id="status">waiting</div>
+
+<script>
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+// Violin range: G3 (196Hz) to E7 (~2637Hz) approximately
+const VIOLIN_LOW = 190;
+const VIOLIN_HIGH = 2700;
+
+let audioContext;
+let analyser;
+let stream;
+let isRunning = false;
+let animFrameId;
+
+const noteDisplay = document.getElementById('note-display');
+const centsDisplay = document.getElementById('cents-display');
+const freqDisplay = document.getElementById('freq-display');
+const deviationMarker = document.getElementById('deviation-marker');
+const feedbackGlow = document.getElementById('feedback-glow');
+const startBtn = document.getElementById('start-btn');
+const statusEl = document.getElementById('status');
+const baseFreqInput = document.getElementById('base-freq');
+
+function getBaseA4() {
+  return parseFloat(baseFreqInput.value) || 442;
+}
+
+function frequencyToNoteInfo(freq) {
+  const A4 = getBaseA4();
+  // Semitones from A4
+  const semitones = 12 * Math.log2(freq / A4);
+  const roundedSemitones = Math.round(semitones);
+  const cents = (semitones - roundedSemitones) * 100;
+
+  // Note index (A = 9 in our NOTE_NAMES array where C=0)
+  let noteIndex = ((roundedSemitones % 12) + 9) % 12;
+  if (noteIndex < 0) noteIndex += 12;
+  const octave = Math.floor((roundedSemitones + 9) / 12) + 4;
+
+  return {
+    name: NOTE_NAMES[noteIndex],
+    octave: octave,
+    cents: cents, // -50 to +50
+    frequency: freq
+  };
+}
+
+// Compute deviation ratio: 0 = just, 1 = maximally off (50 cents)
+// Within justThreshold cents -> 0
+function deviationRatio(cents) {
+  const absCents = Math.abs(cents);
+  const justThreshold = 10; // cents
+  if (absCents <= justThreshold) return 0;
+  return Math.min((absCents - justThreshold) / (50 - justThreshold), 1);
+}
+
+function getFeedbackColor(cents) {
+  const ratio = deviationRatio(cents);
+  if (ratio === 0) {
+    return { r: 255, g: 255, b: 255, intensity: 0.03 };
+  }
+  if (cents < 0) {
+    // Flat -> blue
+    return { r: 60, g: 120, b: 255, intensity: ratio * 0.35 };
+  } else {
+    // Sharp -> red
+    return { r: 255, g: 70, b: 70, intensity: ratio * 0.35 };
+  }
+}
+
+function updateVisuals(noteInfo) {
+  if (!noteInfo) {
+    document.body.classList.add('idle');
+    feedbackGlow.style.opacity = '0';
+    centsDisplay.textContent = '';
+    freqDisplay.textContent = '';
+    deviationMarker.style.left = '50%';
+    deviationMarker.style.background = 'rgba(255,255,255,0.3)';
+    deviationMarker.style.boxShadow = 'none';
+    return;
+  }
+
+  document.body.classList.remove('idle');
+
+  const { name, octave, cents, frequency } = noteInfo;
+  const color = getFeedbackColor(cents);
+  const ratio = deviationRatio(cents);
+
+  // Note name
+  noteDisplay.textContent = name + octave;
+
+  // Cents display
+  const centsSign = cents >= 0 ? '+' : '';
+  centsDisplay.textContent = `${centsSign}${cents.toFixed(1)} cents`;
+  centsDisplay.style.color = ratio === 0
+    ? 'rgba(255,255,255,0.7)'
+    : `rgba(${color.r},${color.g},${color.b},0.7)`;
+
+  // Frequency
+  freqDisplay.textContent = `${frequency.toFixed(1)} Hz`;
+
+  // Background glow
+  feedbackGlow.style.background = `radial-gradient(ellipse at center, rgba(${color.r},${color.g},${color.b},${color.intensity}) 0%, transparent 70%)`;
+  feedbackGlow.style.opacity = '1';
+
+  // Deviation bar: cents goes from -50 to +50, map to 0% to 100%
+  const barPos = 50 + (cents / 50) * 50;
+  const clampedPos = Math.max(2, Math.min(98, barPos));
+  deviationMarker.style.left = `${clampedPos}%`;
+
+  if (ratio === 0) {
+    deviationMarker.style.background = 'rgba(255,255,255,0.95)';
+    deviationMarker.style.boxShadow = '0 0 12px rgba(255,255,255,0.5)';
+  } else {
+    deviationMarker.style.background = `rgb(${color.r},${color.g},${color.b})`;
+    deviationMarker.style.boxShadow = `0 0 12px rgba(${color.r},${color.g},${color.b},0.5)`;
+  }
+
+  // Body subtle tint
+  if (ratio === 0) {
+    document.body.style.backgroundColor = '#0a0a0c';
+  } else {
+    const bgIntensity = ratio * 0.04;
+    document.body.style.backgroundColor = `rgb(${Math.round(10 + color.r * bgIntensity)},${Math.round(10 + color.g * bgIntensity * 0.5)},${Math.round(12 + color.b * bgIntensity)})`;
+  }
+}
+
+// Autocorrelation pitch detection
+function autoCorrelate(buf, sampleRate) {
+  // Check if there's enough signal
+  let rms = 0;
+  for (let i = 0; i < buf.length; i++) {
+    rms += buf[i] * buf[i];
+  }
+  rms = Math.sqrt(rms / buf.length);
+  if (rms < 0.01) return -1; // Not enough signal
+
+  // Trim silence from ends
+  let r1 = 0, r2 = buf.length - 1;
+  const threshold = 0.2;
+  for (let i = 0; i < buf.length / 2; i++) {
+    if (Math.abs(buf[i]) < threshold) { r1 = i; } else break;
+  }
+  for (let i = buf.length - 1; i >= buf.length / 2; i--) {
+    if (Math.abs(buf[i]) < threshold) { r2 = i; } else break;
+  }
+
+  buf = buf.slice(r1, r2);
+  const SIZE = buf.length;
+
+  // Autocorrelation
+  const c = new Float32Array(SIZE);
+  for (let i = 0; i < SIZE; i++) {
+    for (let j = 0; j < SIZE - i; j++) {
+      c[i] += buf[j] * buf[j + i];
+    }
+  }
+
+  // Find first dip
+  let d = 0;
+  while (c[d] > c[d + 1] && d < SIZE - 1) d++;
+
+  // Find best correlation after the dip
+  let maxVal = -1, maxPos = -1;
+  for (let i = d; i < SIZE; i++) {
+    if (c[i] > maxVal) {
+      maxVal = c[i];
+      maxPos = i;
+    }
+  }
+
+  // Parabolic interpolation for better accuracy
+  if (maxPos > 0 && maxPos < SIZE - 1) {
+    const a = c[maxPos - 1];
+    const b = c[maxPos];
+    const cc = c[maxPos + 1];
+    const shift = (cc - a) / (2 * (2 * b - a - cc));
+    maxPos += shift;
+  }
+
+  const freq = sampleRate / maxPos;
+
+  // Sanity check for violin range
+  if (freq < VIOLIN_LOW || freq > VIOLIN_HIGH) return -1;
+
+  return freq;
+}
+
+// Smoothing buffer
+const SMOOTHING_SIZE = 5;
+let freqBuffer = [];
+
+function smoothFrequency(freq) {
+  freqBuffer.push(freq);
+  if (freqBuffer.length > SMOOTHING_SIZE) {
+    freqBuffer.shift();
+  }
+  // Median filter
+  const sorted = [...freqBuffer].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
+let silenceFrames = 0;
+const SILENCE_THRESHOLD = 15; // frames before showing idle
+
+function processAudio() {
+  if (!isRunning) return;
+
+  const bufferLength = analyser.fftSize;
+  const buffer = new Float32Array(bufferLength);
+  analyser.getFloatTimeDomainData(buffer);
+
+  const freq = autoCorrelate(buffer, audioContext.sampleRate);
+
+  if (freq === -1) {
+    silenceFrames++;
+    if (silenceFrames > SILENCE_THRESHOLD) {
+      updateVisuals(null);
+      freqBuffer = [];
+    }
+  } else {
+    silenceFrames = 0;
+    const smoothed = smoothFrequency(freq);
+    const noteInfo = frequencyToNoteInfo(smoothed);
+    updateVisuals(noteInfo);
+  }
+
+  animFrameId = requestAnimationFrame(processAudio);
+}
+
+async function start() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      }
+    });
+
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 4096;
+    analyser.smoothingTimeConstant = 0;
+
+    const source = audioContext.createMediaStreamSource(stream);
+    source.connect(analyser);
+
+    isRunning = true;
+    startBtn.classList.add('active');
+    statusEl.textContent = 'listening';
+
+    processAudio();
+  } catch (err) {
+    statusEl.textContent = 'microphone access denied';
+    console.error(err);
+  }
+}
+
+startBtn.addEventListener('click', start);
+
+// Keyboard shortcut
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' && !isRunning) {
+    e.preventDefault();
+    start();
+  }
+});
+</script>
+</body>
+</html>
