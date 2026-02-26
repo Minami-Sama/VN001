@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Intonation Mirror</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    user-select: none;
+    transition: background-color 0.08s ease;
+  }
+
+  /* Vertical spectrum bar - left edge */
+  #spectrum-bar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 28px;
+    height: 100vh;
+    z-index: 10;
+  }
+
+  #spectrum-canvas {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Triangle indicator on spectrum bar - 1.5x larger */
+  #indicator {
+    position: fixed;
+    left: 20px;
+    z-index: 11;
+    width: 0;
+    height: 0;
+    border-top: 15px solid transparent;
+    border-bottom: 15px solid transparent;
+    border-right: 21px solid rgba(0,0,0,0.55);
+    transform: translateY(-15px);
+    transition: top 0.08s ease;
+    display: none;
+    filter: drop-shadow(1px 0 3px rgba(0,0,0,0.2));
+  }
+
+  /* Trail canvas - full width from indicator area */
+  #trail-canvas {
+    position: fixed;
+    left: 41px;
+    top: 0;
+    right: 0;
+    height: 100vh;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  /* Main content area */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-left: 28px;
+  }
+
+  .container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    z-index: 6;
+  }
+
+  #note-display {
+    font-size: 9rem;
+    font-weight: 600;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    min-width: 280px;
+    text-align: center;
+    color: rgba(0,0,0,0.7);
+    text-shadow: 0 0 20px rgba(0,0,0,0.15);
+    transition: color 0.1s ease;
+  }
+
+  #cents-display {
+    font-size: 2rem;
+    font-weight: 300;
+    color: rgba(0,0,0,0.45);
+    letter-spacing: 0.1em;
+    height: 2.5rem;
+  }
+
+  #freq-display {
+    font-size: 0.85rem;
+    font-weight: 300;
+    color: rgba(0,0,0,0.25);
+    letter-spacing: 0.15em;
+  }
+
+  /* Long-tone average */
+  #avg-display {
+    font-size: 0.8rem;
+    font-weight: 300;
+    color: rgba(0,0,0,0.18);
+    letter-spacing: 0.1em;
+    height: 1.2rem;
+    margin-top: 0.3rem;
+  }
+
+  /* Toggle button */
+  #toggle-btn {
+    padding: 0.8rem 2.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+    font-weight: 400;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    background: rgba(0,0,0,0.15);
+    color: rgba(0,0,0,0.6);
+    border: 1px solid rgba(0,0,0,0.15);
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 1rem;
+  }
+
+  #toggle-btn:hover {
+    background: rgba(0,0,0,0.25);
+    color: rgba(0,0,0,0.8);
+  }
+
+  #toggle-btn.running {
+    background: rgba(0,0,0,0.2);
+    color: rgba(0,0,0,0.5);
+  }
+
+  /* Settings area - top right */
+  #settings {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    font-size: 0.75rem;
+    color: rgba(0,0,0,0.3);
+    letter-spacing: 0.1em;
+    z-index: 12;
+  }
+
+  #settings label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  #settings input[type="number"] {
+    width: 3.5rem;
+    background: rgba(0,0,0,0.08);
+    border: 1px solid rgba(0,0,0,0.12);
+    color: rgba(0,0,0,0.5);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    padding: 0.25rem 0.4rem;
+    border-radius: 2px;
+    text-align: center;
+  }
+
+  #settings input[type="number"]:focus {
+    outline: none;
+    border-color: rgba(0,0,0,0.3);
+  }
+
+  #trail-toggle {
+    background: rgba(0,0,0,0.1);
+    border: 1px solid rgba(0,0,0,0.12);
+    color: rgba(0,0,0,0.4);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 2px;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    transition: all 0.2s ease;
+  }
+
+  #trail-toggle:hover {
+    background: rgba(0,0,0,0.18);
+    color: rgba(0,0,0,0.6);
+  }
+
+  #trail-toggle.active {
+    background: rgba(0,0,0,0.15);
+    color: rgba(0,0,0,0.5);
+  }
+
+  /* Idle state */
+  .idle #note-display {
+    color: rgba(0,0,0,0.08);
+  }
+  .idle #note-display::after {
+    content: '♪';
+  }
+
+  #title {
+    position: fixed;
+    top: 1rem;
+    left: 44px;
+    font-size: 0.65rem;
+    font-weight: 300;
+    color: rgba(0,0,0,0.15);
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    z-index: 12;
+  }
+
+  #debug {
+    position: fixed;
+    bottom: 1rem;
+    left: 44px;
+    font-size: 0.6rem;
+    color: rgba(0,0,0,0.12);
+    letter-spacing: 0.05em;
+    z-index: 12;
+  }
+</style>
+</head>
+<body>
+
+<div id="spectrum-bar">
+  <canvas id="spectrum-canvas"></canvas>
+</div>
+<div id="indicator"></div>
+
+<canvas id="trail-canvas"></canvas>
+
+<div id="title">Intonation Mirror</div>
+
+<div id="settings">
+  <button id="trail-toggle" class="active">TRAIL</button>
+  <label>
+    A4 =
+    <input type="number" id="base-freq" value="442" min="420" max="460" step="1">
+    Hz
+  </label>
+</div>
+
+<div class="main">
+  <div class="container">
+    <div id="note-display"></div>
+    <div id="cents-display"></div>
+    <div id="freq-display"></div>
+    <div id="avg-display"></div>
+    <button id="toggle-btn">START</button>
+  </div>
+</div>
+
+<div id="debug"></div>
+
+<script>
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+const VIOLIN_LOW = 180;
+const VIOLIN_HIGH = 2800;
+
+let audioContext;
+let analyser;
+let stream;
+let isRunning = false;
+let animFrameId;
+let trailEnabled = true;
+
+const noteDisplay = document.getElementById('note-display');
+const centsDisplay = document.getElementById('cents-display');
+const freqDisplay = document.getElementById('freq-display');
+const avgDisplay = document.getElementById('avg-display');
+const toggleBtn = document.getElementById('toggle-btn');
+const trailToggle = document.getElementById('trail-toggle');
+const baseFreqInput = document.getElementById('base-freq');
+const debugEl = document.getElementById('debug');
+const indicator = document.getElementById('indicator');
+const spectrumCanvas = document.getElementById('spectrum-canvas');
+const trailCanvas = document.getElementById('trail-canvas');
+
+// ===========================================
+// Trail toggle
+// ===========================================
+
+trailToggle.addEventListener('click', () => {
+  trailEnabled = !trailEnabled;
+  trailToggle.classList.toggle('active', trailEnabled);
+  if (!trailEnabled) {
+    const ctx = trailCanvas.getContext('2d');
+    ctx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
+    trailData = [];
+  }
+});
+
+// ===========================================
+// Pitch history trail - white line across full width
+// ===========================================
+
+const TRAIL_SECONDS = 6;
+const TRAIL_FPS = 60;
+const TRAIL_LENGTH = TRAIL_SECONDS * TRAIL_FPS;
+let trailData = []; // cents value or null for silence
+
+function addTrailPoint(cents) {
+  trailData.push(cents);
+  if (trailData.length > TRAIL_LENGTH) {
+    trailData.shift();
+  }
+}
+
+function addTrailSilence() {
+  trailData.push(null);
+  if (trailData.length > TRAIL_LENGTH) {
+    trailData.shift();
+  }
+}
+
+function drawTrail() {
+  if (!trailEnabled) return;
+
+  const canvas = trailCanvas;
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth;
+  const h = canvas.offsetHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+
+  if (trailData.length < 2) return;
+
+  const centerY = h / 2;
+
+  // Draw trail: newest on left (x=0), oldest on right
+  ctx.lineWidth = 1.5;
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  let prevX = null;
+  let prevY = null;
+
+  for (let i = 0; i < trailData.length; i++) {
+    const point = trailData[trailData.length - 1 - i]; // newest first
+    const x = (i / TRAIL_LENGTH) * w;
+
+    if (point === null) {
+      prevX = null;
+      prevY = null;
+      continue;
+    }
+
+    const clamped = Math.max(-50, Math.min(50, point));
+    const y = centerY - (clamped / 50) * (h * 0.45);
+
+    if (prevX !== null && prevY !== null) {
+      const age = i / TRAIL_LENGTH;
+      const alpha = 0.5 * (1 - age * 0.8);
+      ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+      ctx.beginPath();
+      ctx.moveTo(prevX, prevY);
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+
+    prevX = x;
+    prevY = y;
+  }
+}
+
+// ===========================================
+// Long-tone average (rolling 10 seconds)
+// ===========================================
+
+const AVG_WINDOW_MS = 10000;
+let centsHistory = [];
+
+function addCentsForAvg(cents) {
+  const now = Date.now();
+  centsHistory.push({ cents, time: now });
+  while (centsHistory.length > 0 && now - centsHistory[0].time > AVG_WINDOW_MS) {
+    centsHistory.shift();
+  }
+}
+
+function getAvgCents() {
+  if (centsHistory.length < 10) return null;
+  const sum = centsHistory.reduce((acc, c) => acc + c.cents, 0);
+  return sum / centsHistory.length;
+}
+
+function updateAvgDisplay() {
+  const avg = getAvgCents();
+  if (avg === null) {
+    avgDisplay.textContent = '';
+    return;
+  }
+  const sign = avg >= 0 ? '+' : '';
+  avgDisplay.textContent = `avg ${sign}${avg.toFixed(1)}¢`;
+}
+
+// ===========================================
+// Haptic feedback
+// ===========================================
+
+let wasInJust = false;
+
+function checkHaptic(cents) {
+  const inJust = Math.abs(cents) <= 10;
+  if (inJust && !wasInJust) {
+    if (navigator.vibrate) {
+      navigator.vibrate(40);
+    }
+  }
+  wasInJust = inJust;
+}
+
+// ===========================================
+// Spectrum bar
+// ===========================================
+
+function drawSpectrumBar() {
+  const canvas = spectrumCanvas;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = canvas.offsetWidth * dpr;
+  canvas.height = canvas.offsetHeight * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const w = canvas.offsetWidth;
+  const h = canvas.offsetHeight;
+
+  for (let y = 0; y < h; y++) {
+    const cents = 50 - (y / h) * 100;
+    const c = centsToColor(cents);
+    ctx.fillStyle = `rgb(${c.r},${c.g},${c.b})`;
+    ctx.fillRect(0, y, w, 1);
+  }
+}
+
+function getBaseA4() {
+  return parseFloat(baseFreqInput.value) || 442;
+}
+
+function frequencyToNoteInfo(freq) {
+  const A4 = getBaseA4();
+  const semitones = 12 * Math.log2(freq / A4);
+  const roundedSemitones = Math.round(semitones);
+  const cents = (semitones - roundedSemitones) * 100;
+
+  let noteIndex = ((roundedSemitones % 12) + 9) % 12;
+  if (noteIndex < 0) noteIndex += 12;
+  const octave = Math.floor((roundedSemitones + 9) / 12) + 4;
+
+  return {
+    name: NOTE_NAMES[noteIndex],
+    octave: octave,
+    cents: cents,
+    frequency: freq
+  };
+}
+
+// ===========================================
+// Spectrum color mapping
+// ===========================================
+
+function centsToColor(cents) {
+  const justThreshold = 10;
+  const absCents = Math.abs(cents);
+
+  if (absCents <= justThreshold) {
+    return { r: 0, g: 200, b: 50 };
+  }
+
+  const t = Math.min((absCents - justThreshold) / (50 - justThreshold), 1);
+
+  if (cents < 0) {
+    if (t < 0.5) {
+      const s = t / 0.5;
+      return {
+        r: 0,
+        g: Math.round(200 - 20 * s),
+        b: Math.round(50 + 150 * s)
+      };
+    } else {
+      const s = (t - 0.5) / 0.5;
+      return {
+        r: Math.round(30 * s),
+        g: Math.round(180 - 100 * s),
+        b: Math.round(200 + 55 * s)
+      };
+    }
+  } else {
+    if (t < 0.5) {
+      const s = t / 0.5;
+      return {
+        r: Math.round(220 * s),
+        g: Math.round(200),
+        b: Math.round(50 - 50 * s)
+      };
+    } else {
+      const s = (t - 0.5) / 0.5;
+      return {
+        r: Math.round(220 + 35 * s),
+        g: Math.round(200 - 150 * s),
+        b: 0
+      };
+    }
+  }
+}
+
+function updateIndicator(cents) {
+  const clamped = Math.max(-50, Math.min(50, cents));
+  const ratio = (50 - clamped) / 100;
+  const y = ratio * window.innerHeight;
+  indicator.style.top = y + 'px';
+  indicator.style.display = 'block';
+}
+
+const JUST_COLOR = { r: 0, g: 200, b: 50 };
+
+function setBackground(color) {
+  document.body.style.backgroundColor = `rgb(${color.r},${color.g},${color.b})`;
+}
+
+function updateVisuals(noteInfo) {
+  if (!noteInfo) {
+    document.body.classList.add('idle');
+    setBackground(JUST_COLOR);
+    indicator.style.display = 'none';
+    centsDisplay.textContent = '';
+    freqDisplay.textContent = '';
+    noteDisplay.textContent = '';
+    addTrailSilence();
+    drawTrail();
+    updateAvgDisplay();
+    return;
+  }
+
+  document.body.classList.remove('idle');
+
+  const { name, octave, cents, frequency } = noteInfo;
+  const color = centsToColor(cents);
+
+  setBackground(color);
+  updateIndicator(cents);
+
+  noteDisplay.textContent = name + octave;
+
+  const absCents = Math.abs(cents);
+  if (absCents < 0.1) {
+    centsDisplay.textContent = '◎';
+  } else {
+    const centsSign = cents >= 0 ? '+' : '';
+    centsDisplay.textContent = `${centsSign}${cents.toFixed(1)}¢`;
+  }
+
+  freqDisplay.textContent = `${frequency.toFixed(1)} Hz`;
+
+  addTrailPoint(cents);
+  addCentsForAvg(cents);
+  drawTrail();
+  updateAvgDisplay();
+  checkHaptic(cents);
+}
+
+// ============================================
+// YIN Pitch Detection
+// ============================================
+
+function yinPitchDetect(buf, sampleRate) {
+  const BUFFER_SIZE = buf.length;
+  const YIN_THRESHOLD = 0.15;
+  const halfSize = Math.floor(BUFFER_SIZE / 2);
+
+  let rms = 0;
+  for (let i = 0; i < BUFFER_SIZE; i++) {
+    rms += buf[i] * buf[i];
+  }
+  rms = Math.sqrt(rms / BUFFER_SIZE);
+  if (rms < 0.005) return -1;
+
+  const diff = new Float32Array(halfSize);
+  for (let tau = 0; tau < halfSize; tau++) {
+    let sum = 0;
+    for (let j = 0; j < halfSize; j++) {
+      const delta = buf[j] - buf[j + tau];
+      sum += delta * delta;
+    }
+    diff[tau] = sum;
+  }
+
+  const cmndf = new Float32Array(halfSize);
+  cmndf[0] = 1;
+  let runningSum = 0;
+  for (let tau = 1; tau < halfSize; tau++) {
+    runningSum += diff[tau];
+    cmndf[tau] = diff[tau] / (runningSum / tau);
+  }
+
+  const minPeriod = Math.floor(sampleRate / VIOLIN_HIGH);
+  const maxPeriod = Math.floor(sampleRate / VIOLIN_LOW);
+  const searchEnd = Math.min(maxPeriod, halfSize - 1);
+
+  let bestTau = -1;
+
+  for (let tau = minPeriod; tau < searchEnd; tau++) {
+    if (cmndf[tau] < YIN_THRESHOLD) {
+      while (tau + 1 < searchEnd && cmndf[tau + 1] < cmndf[tau]) {
+        tau++;
+      }
+      bestTau = tau;
+      break;
+    }
+  }
+
+  if (bestTau === -1) {
+    let minVal = Infinity;
+    for (let tau = minPeriod; tau < searchEnd; tau++) {
+      if (cmndf[tau] < minVal) {
+        minVal = cmndf[tau];
+        bestTau = tau;
+      }
+    }
+    if (minVal > 0.5) return -1;
+  }
+
+  if (bestTau === -1) return -1;
+
+  let betterTau = bestTau;
+  if (bestTau > 0 && bestTau < halfSize - 1) {
+    const s0 = cmndf[bestTau - 1];
+    const s1 = cmndf[bestTau];
+    const s2 = cmndf[bestTau + 1];
+    const denom = 2 * s1 - s2 - s0;
+    if (denom !== 0) {
+      betterTau = bestTau + (s2 - s0) / (2 * denom);
+    }
+  }
+
+  const freq = sampleRate / betterTau;
+  if (freq < VIOLIN_LOW || freq > VIOLIN_HIGH) return -1;
+
+  return freq;
+}
+
+const SMOOTHING_SIZE = 3;
+let freqBuffer = [];
+
+function smoothFrequency(freq) {
+  freqBuffer.push(freq);
+  if (freqBuffer.length > SMOOTHING_SIZE) {
+    freqBuffer.shift();
+  }
+  const sorted = [...freqBuffer].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
+
+let silenceFrames = 0;
+const SILENCE_THRESHOLD = 12;
+
+function processAudio() {
+  if (!isRunning) return;
+
+  const bufferLength = analyser.fftSize;
+  const buffer = new Float32Array(bufferLength);
+  analyser.getFloatTimeDomainData(buffer);
+
+  let rms = 0;
+  for (let i = 0; i < bufferLength; i++) {
+    rms += buffer[i] * buffer[i];
+  }
+  rms = Math.sqrt(rms / bufferLength);
+
+  const freq = yinPitchDetect(buffer, audioContext.sampleRate);
+
+  debugEl.textContent = `rms: ${rms.toFixed(4)} | ${freq > 0 ? freq.toFixed(1) + ' Hz' : '—'}`;
+
+  if (freq === -1) {
+    silenceFrames++;
+    if (silenceFrames > SILENCE_THRESHOLD) {
+      updateVisuals(null);
+      freqBuffer = [];
+    }
+  } else {
+    silenceFrames = 0;
+    const smoothed = smoothFrequency(freq);
+    const noteInfo = frequencyToNoteInfo(smoothed);
+    updateVisuals(noteInfo);
+  }
+
+  animFrameId = requestAnimationFrame(processAudio);
+}
+
+async function start() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        channelCount: 1,
+        sampleRate: { ideal: 48000 }
+      }
+    });
+
+    audioContext = new (window.AudioContext || window.webkitAudioContext)({
+      sampleRate: 48000
+    });
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 8192;
+    analyser.smoothingTimeConstant = 0;
+
+    const source = audioContext.createMediaStreamSource(stream);
+    source.connect(analyser);
+
+    isRunning = true;
+    toggleBtn.textContent = 'STOP';
+    toggleBtn.classList.add('running');
+
+    processAudio();
+  } catch (err) {
+    debugEl.textContent = 'microphone access denied';
+    console.error(err);
+  }
+}
+
+function stop() {
+  isRunning = false;
+  if (animFrameId) {
+    cancelAnimationFrame(animFrameId);
+    animFrameId = null;
+  }
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+    stream = null;
+  }
+  if (audioContext) {
+    audioContext.close();
+    audioContext = null;
+  }
+  analyser = null;
+  freqBuffer = [];
+  silenceFrames = 0;
+  trailData = [];
+  centsHistory = [];
+  wasInJust = false;
+
+  toggleBtn.textContent = 'START';
+  toggleBtn.classList.remove('running');
+  document.body.classList.add('idle');
+  setBackground(JUST_COLOR);
+  indicator.style.display = 'none';
+  noteDisplay.textContent = '';
+  centsDisplay.textContent = '';
+  freqDisplay.textContent = '';
+  avgDisplay.textContent = '';
+  debugEl.textContent = '';
+
+  const ctx = trailCanvas.getContext('2d');
+  ctx.clearRect(0, 0, trailCanvas.width, trailCanvas.height);
+}
+
+toggleBtn.addEventListener('click', () => {
+  if (isRunning) {
+    stop();
+  } else {
+    start();
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (isRunning) { stop(); } else { start(); }
+  }
+});
+
+function init() {
+  document.body.classList.add('idle');
+  setBackground(JUST_COLOR);
+  drawSpectrumBar();
+}
+
+window.addEventListener('resize', drawSpectrumBar);
+init();
+</script>
+</body>
+</html>
